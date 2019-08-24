@@ -3,7 +3,7 @@ library directory_picker;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:simple_permissions/simple_permissions.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'directory_list.dart';
 
@@ -120,10 +120,11 @@ class _DirectoryPickerDialogState extends State<_DirectoryPickerDialog>
   /// if permission is not granter
   Future<void> _getPermissionStatus({bool silent = false}) async {
     List<PermissionStatus> newStatuses = [];
-    for (Permission p in requiredPermissions) {
-      final status = await SimplePermissions.getPermissionStatus(p);
-      newStatuses.add(status);
-    }
+    requiredPermissions.then((permissions) {
+      permissions.forEach((group, status) {
+        newStatuses.add(status);
+      });
+    });
 
     setState(() {
       statuses = newStatuses;
@@ -137,17 +138,19 @@ class _DirectoryPickerDialogState extends State<_DirectoryPickerDialog>
   Future<void> _requestPermission() async {
     if (status == _PickerPermissionStatus.canPrompt) {
       List<PermissionStatus> newStatuses = [];
-      for (Permission p in requiredPermissions) {
-        final status = await SimplePermissions.requestPermission(p);
-        newStatuses.add(status);
-      }
+      requiredPermissions.then((permissions) {
+        permissions.forEach((group, status) {
+          newStatuses.add(status);
+        });
+      });
 
       setState(() {
         statuses = newStatuses;
       });
-    } else if (status == _PickerPermissionStatus.grantFromSettings) {
-      await SimplePermissions.openSettings();
     }
+//    else if (status == _PickerPermissionStatus.grantFromSettings) {
+//      await SimplePermissions.openSettings();
+//    }
   }
 
   Widget _buildBody(BuildContext context) {
@@ -204,12 +207,9 @@ class _DirectoryPickerDialogState extends State<_DirectoryPickerDialog>
     );
   }
 
-  List<Permission> get requiredPermissions {
-    List<Permission> permissions = [Permission.ReadExternalStorage];
-    if (data.allowFolderCreation) {
-      permissions.add(Permission.WriteExternalStorage);
-    }
-    return permissions;
+  Future<Map<PermissionGroup, PermissionStatus>> get requiredPermissions async {
+    return await PermissionHandler()
+        .requestPermissions([PermissionGroup.storage]);
   }
 
   DirectoryPickerData get data => DirectoryPickerData.of(context);
@@ -225,12 +225,11 @@ class _DirectoryPickerDialogState extends State<_DirectoryPickerDialog>
   _PickerPermissionStatus get status {
     if (statuses == null) {
       return null;
-    } else if (statuses
-        .every((status) => status == PermissionStatus.authorized)) {
+    } else if (statuses.every((status) => status == PermissionStatus.granted)) {
       return _PickerPermissionStatus.authorized;
     } else if (statuses.contains(PermissionStatus.restricted)) {
       return _PickerPermissionStatus.restricted;
-    } else if (statuses.contains(PermissionStatus.deniedNeverAsk)) {
+    } else if (statuses.contains(PermissionStatus.denied)) {
       return _PickerPermissionStatus.grantFromSettings;
     } else {
       return _PickerPermissionStatus.canPrompt;
